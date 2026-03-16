@@ -50,34 +50,51 @@ enum class VerifyState { LOADING, SUCCESS }
 
 @Composable
 fun VerificationScreen(
-    scannedHash: String = "0X7F3...4A9", // This will be passed from the Scanner
+    scannedHash: String = "0X7F3...4A9",
     onBack: () -> Unit = {}
 ) {
     var currentState by remember { mutableStateOf(VerifyState.LOADING) }
 
-    // This data will be populated by your Node.js backend based on the scannedHash
-    val liveVerificationData = remember {
-        VerificationData(
-            batchId = "#0x7F3",
-            status = "Authentic",
-            aiScore = 94,
-            gradeTitle = "Grade A+ Excellent",
-            gradeDesc = "Sensor nodes confirm optimal freshness and organic integrity.",
-            network = "Mainnet 2.0",
-            origin = "Farm 082"
-        )
-    }
+    // We start with null, and populate it when the server responds!
+    var liveVerificationData by remember { mutableStateOf<VerificationData?>(null) }
 
-    // Simulate API Network Call & Blockchain Sync
-    LaunchedEffect(Unit) {
-        delay(3500) // 3.5 seconds of "verifying"
-        currentState = VerifyState.SUCCESS
+    // FIRE THE REAL API CALL
+    LaunchedEffect(scannedHash) {
+        try {
+            // This reaches out to your teammate's ngrok server!
+            val response = com.indianext.app.network.RetrofitClient.apiService.verifyHash(scannedHash)
+            val body = response.body()
+
+            if (response.isSuccessful && body != null) {
+                // Success! Map the Network Response to the UI Model
+                liveVerificationData = VerificationData(
+                    batchId = body.batchId,
+                    status = body.status,
+                    aiScore = body.aiScore,
+                    gradeTitle = body.gradeTitle,
+                    gradeDesc = body.gradeDesc,
+                    network = body.network,
+                    origin = body.origin
+                )
+                currentState = VerifyState.SUCCESS
+            } else {
+                // Handle 404s (e.g., Fake/Unregistered QR code)
+                android.util.Log.e("API_ERROR", "Server returned: ${response.code()}")
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("API_ERROR", "Network failed: ${e.message}")
+        }
     }
 
     Crossfade(targetState = currentState, label = "verification_transition") { state ->
         when (state) {
             VerifyState.LOADING -> VerificationLoadingView(scannedHash)
-            VerifyState.SUCCESS -> VerificationSuccessView(liveVerificationData, onBack)
+            VerifyState.SUCCESS -> {
+                // Safely unwrap the data and pass it to your beautiful UI
+                liveVerificationData?.let { data ->
+                    VerificationSuccessView(data, onBack)
+                }
+            }
         }
     }
 }
