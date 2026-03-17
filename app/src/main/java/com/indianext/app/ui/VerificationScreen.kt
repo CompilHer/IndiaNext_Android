@@ -19,9 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
@@ -31,9 +29,6 @@ import androidx.compose.ui.unit.sp
 import com.indianext.app.ui.theme.AgritechGreen
 import com.indianext.app.ui.theme.BackgroundWhite
 import com.indianext.app.ui.theme.DeepCharcoal
-import kotlinx.coroutines.delay
-import kotlin.math.cos
-import kotlin.math.sin
 
 // --- DYNAMIC DATA MODEL ---
 data class VerificationData(
@@ -51,22 +46,19 @@ enum class VerifyState { LOADING, SUCCESS }
 @Composable
 fun VerificationScreen(
     scannedHash: String = "0X7F3...4A9",
-    onBack: () -> Unit = {}
+    onBack: () -> Unit = {},
+    onViewJourney: (String) -> Unit = {} // <-- Parameter Added
 ) {
     var currentState by remember { mutableStateOf(VerifyState.LOADING) }
-
-    // We start with null, and populate it when the server responds!
     var liveVerificationData by remember { mutableStateOf<VerificationData?>(null) }
 
     // FIRE THE REAL API CALL
     LaunchedEffect(scannedHash) {
         try {
-            // This reaches out to your teammate's ngrok server!
             val response = com.indianext.app.network.RetrofitClient.apiService.verifyHash(scannedHash)
             val body = response.body()
 
             if (response.isSuccessful && body != null) {
-                // Success! Map the Network Response to the UI Model
                 liveVerificationData = VerificationData(
                     batchId = body.batchId,
                     status = body.status,
@@ -78,7 +70,6 @@ fun VerificationScreen(
                 )
                 currentState = VerifyState.SUCCESS
             } else {
-                // Handle 404s (e.g., Fake/Unregistered QR code)
                 android.util.Log.e("API_ERROR", "Server returned: ${response.code()}")
             }
         } catch (e: Exception) {
@@ -90,9 +81,8 @@ fun VerificationScreen(
         when (state) {
             VerifyState.LOADING -> VerificationLoadingView(scannedHash)
             VerifyState.SUCCESS -> {
-                // Safely unwrap the data and pass it to your beautiful UI
                 liveVerificationData?.let { data ->
-                    VerificationSuccessView(data, onBack)
+                    VerificationSuccessView(data, onBack, onViewJourney) // <-- Passed Here
                 }
             }
         }
@@ -107,7 +97,6 @@ fun VerificationLoadingView(hash: String) {
     val vibrantGreen = Color(0xFF10B981)
     val darkBg = Color(0xFF121418)
 
-    // Animations
     val infiniteTransition = rememberInfiniteTransition(label = "spin")
     val rotation by infiniteTransition.animateFloat(
         initialValue = 0f, targetValue = 360f,
@@ -127,61 +116,36 @@ fun VerificationLoadingView(hash: String) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(64.dp))
-
-        // --- Animated Hexagon Core ---
         Box(modifier = Modifier.size(240.dp).rotate(rotation), contentAlignment = Alignment.Center) {
-            // Background Orbit Rings
             androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
                 drawCircle(color = vibrantGreen.copy(alpha = 0.1f), radius = size.width / 2, style = Stroke(width = 2.dp.toPx()))
                 drawCircle(color = vibrantGreen.copy(alpha = 0.2f), radius = size.width / 3, style = Stroke(width = 1.dp.toPx()))
             }
-
-            // Center Hexagon Icon Placeholder
             Icon(Icons.Default.Hexagon, contentDescription = null, tint = vibrantGreen, modifier = Modifier.size(64.dp))
-
-            // Orbiting Hexagons
             Box(modifier = Modifier.fillMaxSize()) {
                 Icon(Icons.Default.Hexagon, contentDescription = null, tint = vibrantGreen.copy(alpha = 0.7f), modifier = Modifier.align(Alignment.TopCenter).offset(y = (-12).dp).size(32.dp))
                 Icon(Icons.Default.Hexagon, contentDescription = null, tint = vibrantGreen.copy(alpha = 0.7f), modifier = Modifier.align(Alignment.BottomCenter).offset(y = 12.dp).size(32.dp))
             }
         }
-
         Spacer(modifier = Modifier.height(48.dp))
-
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.Security, contentDescription = null, tint = vibrantGreen, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(8.dp))
             Text("SECURE PROTOCOL ACTIVE", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = vibrantGreen, letterSpacing = 1.sp)
         }
-
         Spacer(modifier = Modifier.height(16.dp))
         Text("Checking Immutable\nLedger...", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White, textAlign = TextAlign.Center, lineHeight = 36.sp)
-
         Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            "Synchronizing batch data with distributed agricultural nodes. This ensures product authenticity and quality standards.",
-            fontSize = 14.sp, color = Color.LightGray, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 16.dp)
-        )
-
+        Text("Synchronizing batch data with distributed agricultural nodes. This ensures product authenticity and quality standards.", fontSize = 14.sp, color = Color.LightGray, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 16.dp))
         Spacer(modifier = Modifier.weight(1f))
-
-        // Progress Bar
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("VERIFYING HASH", fontSize = 10.sp, color = vibrantGreen, fontWeight = FontWeight.Bold)
             Text(hash.uppercase(), fontSize = 10.sp, color = vibrantGreen, fontWeight = FontWeight.Bold)
         }
         Spacer(modifier = Modifier.height(8.dp))
-        LinearProgressIndicator(
-            progress = progress, modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
-            color = vibrantGreen, trackColor = vibrantGreen.copy(alpha = 0.2f)
-        )
-
+        LinearProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)), color = vibrantGreen, trackColor = vibrantGreen.copy(alpha = 0.2f))
         Spacer(modifier = Modifier.height(32.dp))
-
-        Surface(
-            shape = RoundedCornerShape(24.dp), color = Color.White.copy(alpha = 0.1f),
-            modifier = Modifier.padding(bottom = 24.dp)
-        ) {
+        Surface(shape = RoundedCornerShape(24.dp), color = Color.White.copy(alpha = 0.1f), modifier = Modifier.padding(bottom = 24.dp)) {
             Row(modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Sync, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(8.dp))
@@ -195,11 +159,10 @@ fun VerificationLoadingView(hash: String) {
 // 2. LIGHT SUCCESS STATE
 // ==========================================================
 @Composable
-fun VerificationSuccessView(data: VerificationData, onBack: () -> Unit) {
+fun VerificationSuccessView(data: VerificationData, onBack: () -> Unit, onViewJourney: (String) -> Unit) { // <-- Added Here!
     Column(
         modifier = Modifier.fillMaxSize().background(BackgroundWhite).verticalScroll(rememberScrollState())
     ) {
-        // Top Bar
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBackIosNew, contentDescription = "Back", tint = DeepCharcoal) }
             Text("Verification Result", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = DeepCharcoal)
@@ -207,15 +170,11 @@ fun VerificationSuccessView(data: VerificationData, onBack: () -> Unit) {
 
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(modifier = Modifier.height(16.dp))
-
-            // Big Green Checkmark
             Surface(shape = CircleShape, color = AgritechGreen, modifier = Modifier.size(80.dp)) {
                 Icon(Icons.Default.Check, contentDescription = "Success", tint = Color.White, modifier = Modifier.padding(16.dp))
             }
-
             Spacer(modifier = Modifier.height(24.dp))
             Text("Verification Success", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = DeepCharcoal)
-
             Spacer(modifier = Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(data.batchId, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = AgritechGreen)
@@ -224,43 +183,25 @@ fun VerificationSuccessView(data: VerificationData, onBack: () -> Unit) {
                     Text(data.status, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = DeepCharcoal, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
                 }
             }
-
             Spacer(modifier = Modifier.height(32.dp))
 
-            // --- GEMINI AI QUALITY REPORT CARD ---
-            OutlinedCard(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.outlinedCardColors(containerColor = Color.White),
-                border = BorderStroke(1.dp, Color.LightGray.copy(alpha = 0.5f)),
-                shape = RoundedCornerShape(20.dp)
-            ) {
+            // GEMINI AI QUALITY REPORT CARD
+            OutlinedCard(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.outlinedCardColors(containerColor = Color.White), border = BorderStroke(1.dp, Color.LightGray.copy(alpha = 0.5f)), shape = RoundedCornerShape(20.dp)) {
                 Column(modifier = Modifier.padding(24.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = AgritechGreen, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("GEMINI AI QUALITY REPORT", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.Gray, letterSpacing = 1.sp)
                     }
-
                     Spacer(modifier = Modifier.height(32.dp))
-
-                    // Circular Progress Score
                     Box(modifier = Modifier.size(120.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(
-                            progress = data.aiScore / 100f,
-                            modifier = Modifier.fillMaxSize(),
-                            color = AgritechGreen,
-                            trackColor = AgritechGreen.copy(alpha = 0.1f),
-                            strokeWidth = 12.dp,
-                            strokeCap = StrokeCap.Round
-                        )
+                        CircularProgressIndicator(progress = data.aiScore / 100f, modifier = Modifier.fillMaxSize(), color = AgritechGreen, trackColor = AgritechGreen.copy(alpha = 0.1f), strokeWidth = 12.dp, strokeCap = StrokeCap.Round)
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(data.aiScore.toString(), fontSize = 36.sp, fontWeight = FontWeight.Black, color = DeepCharcoal)
                             Text("/ 100", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
                         }
                     }
-
                     Spacer(modifier = Modifier.height(32.dp))
-
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(modifier = Modifier.size(10.dp).background(AgritechGreen, CircleShape))
                         Spacer(modifier = Modifier.width(8.dp))
@@ -270,10 +211,9 @@ fun VerificationSuccessView(data: VerificationData, onBack: () -> Unit) {
                     Text(data.gradeDesc, fontSize = 12.sp, color = Color.Gray, textAlign = TextAlign.Center)
                 }
             }
-
             Spacer(modifier = Modifier.height(16.dp))
 
-            // --- BOTTOM INFO CARDS ---
+            // BOTTOM INFO CARDS
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 OutlinedCard(modifier = Modifier.weight(1f), colors = CardDefaults.outlinedCardColors(containerColor = Color.White), border = BorderStroke(1.dp, Color.LightGray.copy(alpha = 0.5f))) {
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -286,7 +226,6 @@ fun VerificationSuccessView(data: VerificationData, onBack: () -> Unit) {
                         Text(data.network, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = DeepCharcoal)
                     }
                 }
-
                 OutlinedCard(modifier = Modifier.weight(1f), colors = CardDefaults.outlinedCardColors(containerColor = Color.White), border = BorderStroke(1.dp, Color.LightGray.copy(alpha = 0.5f))) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -298,6 +237,16 @@ fun VerificationSuccessView(data: VerificationData, onBack: () -> Unit) {
                         Text(data.origin, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = DeepCharcoal)
                     }
                 }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // THE BRIDGE BUTTON TO TIMELINE
+            Button(
+                onClick = { onViewJourney(data.batchId) },
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = AgritechGreen)
+            ) {
+                Text("View Full Seed-to-Shelf Journey", fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
             Spacer(modifier = Modifier.height(32.dp))
         }

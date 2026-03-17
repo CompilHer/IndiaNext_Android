@@ -23,7 +23,14 @@ data class MintResponse(
     val success: Boolean,
     val batchId: String,
     val txHash: String,
-    val message: String
+    val message: String,
+    val aiQuality: AiQuality? = null
+)
+
+data class AiQuality(
+    val qualityScore: Int,
+    val grade: String,
+    val analysisNotes: String
 )
 
 // --- LOGISTICS API ---
